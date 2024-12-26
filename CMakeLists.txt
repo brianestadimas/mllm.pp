@@ -25,6 +25,7 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_options(-Wno-gnu-string-literal-operator-template)
 
+
 if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
     message(STATUS "ARM detected")
     set(ARM ON)
@@ -33,10 +34,10 @@ endif ()
 
 if (ARM)
     set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/../bin-arm)
-    add_compile_definitions(__ARM_FEATURE_DOTPROD)
+    # add_compile_definitions(__ARM_FEATURE_DOTPROD)
     # 检查是否使用的是 GCC 或 Clang 编译器
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8.2-a+dotprod")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8-a")
     endif()
 else ()
     if (MSVC)

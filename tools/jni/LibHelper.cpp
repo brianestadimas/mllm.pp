@@ -124,8 +124,8 @@ bool LibHelper::setUp(const std::string &base_path, std::string weights_path, st
     switch (model) {
     case PhoneLM:
         logToFile("Initializing PhoneLM model.");
-        // tokenizer_ = make_shared<SmolLMTokenizer>(vocab_path, merge_path);
-        tokenizer_ = std::make_any<SmolLMTokenizer*>(new SmolLMTokenizer(vocab_path, merge_path));
+        tokenizer_ = make_shared<SmolLMTokenizer>(vocab_path, merge_path);
+        // tokenizer_ = std::make_any<SmolLMTokenizer*>(new SmolLMTokenizer(vocab_path, merge_path));
         logToFile("Tokenizer");
         module_ = make_shared<PhoneLMForCausalLM>(phone_config);
         logToFile("Module");
@@ -133,8 +133,8 @@ bool LibHelper::setUp(const std::string &base_path, std::string weights_path, st
     case SMOLLM:
         LOGI("Loading model SMOLLM");
         logToFile("Initializing SMOLLM model.");
-        // tokenizer_ = make_shared<SmolLMTokenizer>(vocab_path, merge_path);
-        tokenizer_ = std::make_any<SmolLMTokenizer*>(new SmolLMTokenizer(vocab_path, merge_path));
+        tokenizer_ = make_shared<SmolLMTokenizer>(vocab_path, merge_path);
+        // tokenizer_ = std::make_any<SmolLMTokenizer*>(new SmolLMTokenizer(vocab_path, merge_path));
         logToFile("Tokenizer");
         module_ = make_shared<SmolLMModel>(smolconfig);
         logToFile("Module");
@@ -144,8 +144,8 @@ bool LibHelper::setUp(const std::string &base_path, std::string weights_path, st
         break;
     case QWEN15:
         qwconfig = QWenConfig(tokens_limit, "1.8B");
-        // tokenizer_ = make_shared<QWenTokenizer>(vocab_path, merge_path);
-        tokenizer_ = std::make_any<QWenTokenizer*>(new QWenTokenizer(vocab_path, merge_path));
+        tokenizer_ = make_shared<QWenTokenizer>(vocab_path, merge_path);
+        // tokenizer_ = std::make_any<QWenTokenizer*>(new QWenTokenizer(vocab_path, merge_path));
         module_ = make_shared<QWenForCausalLM>(qwconfig);
         break;
     case PHI3V:
@@ -157,8 +157,8 @@ bool LibHelper::setUp(const std::string &base_path, std::string weights_path, st
     //     module_ = make_shared<FuyuModel>(fuyuconfig);
     //     break;
     case Bert:
-        // tokenizer_ = make_shared<BertTokenizer>(vocab_path, true);
-        tokenizer_ = std::make_any<BertTokenizer*>(new BertTokenizer(vocab_path, true));
+        tokenizer_ = make_shared<BertTokenizer>(vocab_path, true);
+        // tokenizer_ = std::make_any<BertTokenizer*>(new BertTokenizer(vocab_path, true));
         module_ = make_shared<BertModel>(bertconfig);
         break;
 
@@ -184,8 +184,8 @@ void LibHelper::run(std::string &input_str, std::string &image, unsigned max_ste
     vector<double> profiling_data(3);
 
     if (model_ == QWEN15 || model_ == QWEN25) {
-        // auto tokenizer = dynamic_pointer_cast<QWenTokenizer>(tokenizer_);
-        QWenTokenizer* tokenizer = std::any_cast<QWenTokenizer*>(tokenizer_);
+        auto tokenizer = dynamic_pointer_cast<QWenTokenizer>(tokenizer_);
+        // QWenTokenizer* tokenizer = std::any_cast<QWenTokenizer*>(tokenizer_);
         if (chat_template) input_str = tokenizer->apply_chat_template(input_str);
         if (backend_ == MLLMBackendType::QNN) {
             int chunk_size = 64;
@@ -300,8 +300,8 @@ void LibHelper::run(std::string &input_str, std::string &image, unsigned max_ste
 
     } 
     else if (model_ == SMOLLM) {
-        // auto tokenizer = dynamic_pointer_cast<SmolLMTokenizer>(tokenizer_);
-        SmolLMTokenizer* tokenizer = std::any_cast<SmolLMTokenizer*>(tokenizer_);
+        auto tokenizer = dynamic_pointer_cast<SmolLMTokenizer>(tokenizer_);
+        // SmolLMTokenizer* tokenizer = std::any_cast<SmolLMTokenizer*>(tokenizer_);
         if (chat_template) input_str = tokenizer->apply_chat_template(input_str);
             auto input_tensor = tokenizer->tokenize(input_str);
             max_new_tokens = tokens_limit - input_tensor.sequence();
@@ -332,23 +332,37 @@ void LibHelper::run(std::string &input_str, std::string &image, unsigned max_ste
         LOGI("LOADED PHI3V");
             auto input_str_img = "<|image_1|>\n" + input_str;
             auto in_str = phi3v_processor->tokenizer->apply_chat_template(input_str_img);
+            LOGI("Chat template applied");
+            LOGI("Image path: %s", image.c_str());
+            ssize_t image_size = getFileSize(image);
+            if (image_size != -1) {
+                LOGI("Image file size: %zd bytes", image_size);
+                logToFile("Image file size: " + std::to_string(image_size) + " bytes");
+            } else {
+                LOGE("Unable to determine image file size.");
+                logToFile("Unable to determine image file size.");
+            }
             auto input_tensor = phi3v_processor->process(in_str, image);
+            LOGI("Input tensor processed");
             input_tensor[1].saveData<float>();
             input_tensor[2].saveData<float>();
-
+            LOGI("String processed");
             for (int step = 0; step < 100; step++) {
                 auto result = (*module_)(input_tensor);
+                LOGI("Result processed");
                 auto outputs = phi3v_processor->detokenize(result[0]);
                 auto out_string = outputs.first;
                 auto out_token = outputs.second;
                 LOGI("Output string: %s", out_string.c_str());
-                auto [end, string] = phi3v_processor->tokenizer->postprocess(out_string);
-                output_string_ += string;
-                callback_(output_string_, !end, {});
-                if (!end) { break; }
+
+                auto [not_end, output_string] = phi3v_processor->tokenizer->postprocess(out_string);
+                output_string_ += output_string;
+                callback_(output_string_, !not_end, {});
+                if (!not_end) { break; }
                 chatPostProcessing(out_token, input_tensor[0], {&input_tensor[1], &input_tensor[2]});
             }
             module_->clear_kvcache();
+            
     }
 
     // else if (model_ == FUYU) {
@@ -372,8 +386,8 @@ void LibHelper::run(std::string &input_str, std::string &image, unsigned max_ste
         LOGE("Bert model is not supported in this version.");
     } else if (model_ == PhoneLM) {
         // static bool switch_flag = false;
-        // auto tokenizer = dynamic_pointer_cast<SmolLMTokenizer>(tokenizer_);
-        SmolLMTokenizer* tokenizer = std::any_cast<SmolLMTokenizer*>(tokenizer_);
+        auto tokenizer = dynamic_pointer_cast<SmolLMTokenizer>(tokenizer_);
+        // SmolLMTokenizer* tokenizer = std::any_cast<SmolLMTokenizer*>(tokenizer_);
         if (chat_template) input_str = tokenizer->apply_chat_template(input_str);
         if (backend_ == MLLMBackendType::QNN) {
             int chunk_size = 64;
