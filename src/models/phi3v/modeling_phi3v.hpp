@@ -119,8 +119,8 @@ public:
             for (int i = 0; i < inputs[2].sequence(); i++) {
                 auto img_h = int(inputs[2].d<float>(0, 0, 0, 0));
                 auto img_w = int(inputs[2].d<float>(0, 0, 0, 1));
-                auto h_crop = img_h / 224;
-                auto w_crop = img_w / 224;
+                auto h_crop = img_h / 336;
+                auto w_crop = img_w / 336;
                 auto num_crops = h_crop * w_crop;
                 auto sub_image_features = image_features.clip({1, num_crops + 1}, {}, {}, {});
                 auto sub_image_features_hd = Tensor::phi3v_hd_merge(sub_image_features, h_crop, w_crop);

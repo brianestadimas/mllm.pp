@@ -31,8 +31,15 @@ src/backends/qnn/HexagonSDK/*
 tmp/
 py-build-out/
 mllm.egg-info/
+Phi-3-vision-128k-instruct/
 Phi-3-vision-128k-instruct
+Phi-3-vision-128k-instruct_finetuned
 outputs/
+images
+results
+results2
+results3
+results4
 
 examples/demo_deepseek.cpp
 src/models/deepseek/*

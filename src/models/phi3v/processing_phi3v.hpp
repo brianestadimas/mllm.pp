@@ -30,24 +30,24 @@ struct Phi3VImageDatas {
     vector<int> num_img_tokens;
 };
 class Phi3VImageProcessor {
-    int num_crops = 1;
+    int num_crops = 8;
     std::vector<float> mean_ = {0.48145466, 0.4578275, 0.40821073};
     std::vector<float> std_ = {0.26862954, 0.26130258, 0.27577711};
-    ImageInfo padding_224(ImageInfo &image, float pad_data, bool free_source = true) {
+    ImageInfo padding_336(ImageInfo &image, float pad_data, bool free_source = true) {
         // auto cropped_images = std::vector<ImageInfo>();
         auto height = image.height;
         auto width = image.width;
         int new_height, new_width;
         int top_pad, bottom_pad, left_pad, right_pad;
         if (width >= height) {
-            new_height = static_cast<int>(std::ceil(static_cast<double>(height) / 224) * 224);
+            new_height = static_cast<int>(std::ceil(static_cast<double>(height) / 336) * 336);
             left_pad = 0;
             right_pad = width;
             top_pad = int((new_height - height) / 2);
             bottom_pad = height + top_pad; // tar - (tar - height - top_pad);
             new_width = width;
         } else { // width < height
-            new_width = static_cast<int>(std::ceil(static_cast<double>(width) / 224) * 224);
+            new_width = static_cast<int>(std::ceil(static_cast<double>(width) / 336) * 336);
             top_pad = 0;
             bottom_pad = height;
             left_pad = int((new_width - width) / 2);
@@ -116,11 +116,11 @@ public:
                 scale += 1;
             }
             scale -= 1;
-            new_w = int(scale * 224);
+            new_w = int(scale * 336);
             new_h = int(new_w / ratio);
             std::vector<ImageInfo> temp_image_info = {image_info};
             temp_image_info = PreProcessor::ResizeImages(temp_image_info, new_h, new_w, true, false, ResizeFitEdge::shortest, BILINEAR, true);
-            image_info = padding_224(temp_image_info[0], 1, true);
+            image_info = padding_336(temp_image_info[0], 1, true);
             if (trans) {
                 image_info = PreProcessor::ImageTranspose(image_info);
             }
@@ -132,12 +132,12 @@ public:
             auto h = image_info.height;
             auto w = image_info.width;
             image_sizes.push_back({h, w});
-            int num_img_token = int(((h / 224) * (w / 224) + 1) * 144 + 1 + (h / 224 + 1) * 12);
+            int num_img_token = int(((h / 336) * (w / 336) + 1) * 144 + 1 + (h / 336 + 1) * 12);
             num_img_tokens.push_back(num_img_token);
         }
         auto global_image = vector<ImageInfo>();
         for (int i = 0; i < imageinfos.size(); i++) {
-            global_image.push_back(PreProcessor::ImageInterpolation(imageinfos[i], 224, 224, ResampleType::BICUBIC, false));
+            global_image.push_back(PreProcessor::ImageInterpolation(imageinfos[i], 336, 336, ResampleType::BICUBIC, false));
         }
         PreProcessor::ImageInfos2Pixels(imageinfos, pixel_values);
         PreProcessor::ImageInfos2Pixels(global_image, global_pixel_values);
@@ -152,8 +152,8 @@ public:
             int channel = img.size();
             int height = img[0].size();
             int width = img[0][0].size();
-            int h_times = height / 224;
-            int w_times = width / 224;
+            int h_times = height / 336;
+            int w_times = width / 336;
             int times = 1 + h_times * w_times;
             if (times < num_crops + 1) {
                 times = num_crops + 1;
@@ -163,7 +163,7 @@ public:
             }
         }
         Tensor tensor1(Backend::global_backends[type]);
-        tensor1.reshape(batch_size, imgs[0].size(), time_all, 224, 224);
+        tensor1.reshape(batch_size, imgs[0].size(), time_all, 336, 336);
         tensor1.alloc();
         memset(tensor1.hostPtr<float>(), 0, tensor1.count() * sizeof(float));
         tensor1.setName(std::move(name));
@@ -175,11 +175,11 @@ public:
             int channel = img.size();
             int height = img[0].size();
             int width = img[0][0].size();
-            int h_times = height / 224;
-            int w_times = width / 224;
+            int h_times = height / 336;
+            int w_times = width / 336;
 #pragma omp parallel for collapse(3) num_threads(CPUBackend::cpu_threads)
-            for (int h = 0; h < 224; ++h) {
-                for (int w = 0; w < 224; ++w) {
+            for (int h = 0; h < 336; ++h) {
+                for (int w = 0; w < 336; ++w) {
                     for (int c = 0; c < channel; ++c) {
                         auto value = global_img[c][h][w];
                         tensor1.setDataAt<float>(ii, c, 0, h, w, value);
@@ -190,10 +190,10 @@ public:
 #pragma omp parallel for collapse(4) num_threads(CPUBackend::cpu_threads)
             for (int ht = 0; ht < h_times; ++ht) {
                 for (int wt = 0; wt < w_times; ++wt) {
-                    for (int h = 0; h < 224; ++h) {
-                        for (int w = 0; w < 224; ++w) {
+                    for (int h = 0; h < 336; ++h) {
+                        for (int w = 0; w < 336; ++w) {
                             for (int c = 0; c < channel; ++c) {
-                                auto value = img[c][ht * 224 + h][wt * 224 + w];
+                                auto value = img[c][ht * 336 + h][wt * 336 + w];
                                 tensor1.setDataAt<float>(ii, c, ht * w_times + wt + 1, h, w, value);
                             }
                         }
@@ -212,8 +212,8 @@ public:
             int channel = img.size();
             int height = img[0].size();
             int width = img[0][0].size();
-            int h_times = height / 224;
-            int w_times = width / 224;
+            int h_times = height / 336;
+            int w_times = width / 336;
             int times = 1 + h_times * w_times;
             if (times < num_crops + 1) {
                 times = num_crops + 1;
@@ -223,7 +223,7 @@ public:
             }
         }
         Tensor tensor1(Backend::global_backends[type]);
-        tensor1.reshape(batch_size * time_all, 224, imgs[0].size(), 224);
+        tensor1.reshape(batch_size * time_all, 336, imgs[0].size(), 336);
         tensor1.alloc();
         memset(tensor1.hostPtr<float>(), 0, tensor1.count() * sizeof(float));
         tensor1.setName(std::move(name));
@@ -236,11 +236,11 @@ public:
             int channel = img.size();
             int height = img[0].size();
             int width = img[0][0].size();
-            int h_times = height / 224;
-            int w_times = width / 224;
+            int h_times = height / 336;
+            int w_times = width / 336;
 #pragma omp parallel for collapse(3) num_threads(CPUBackend::cpu_threads)
-            for (int h = 0; h < 224; ++h) {
-                for (int w = 0; w < 224; ++w) {
+            for (int h = 0; h < 336; ++h) {
+                for (int w = 0; w < 336; ++w) {
                     for (int c = 0; c < channel; ++c) {
                         auto value = global_img[c][h][w];
                         tensor1.setDataAt<float>(base_batch + 0, h, c, w, value);
@@ -251,10 +251,10 @@ public:
 #pragma omp parallel for collapse(4) num_threads(CPUBackend::cpu_threads)
             for (int ht = 0; ht < h_times; ++ht) {
                 for (int wt = 0; wt < w_times; ++wt) {
-                    for (int h = 0; h < 224; ++h) {
-                        for (int w = 0; w < 224; ++w) {
+                    for (int h = 0; h < 336; ++h) {
+                        for (int w = 0; w < 336; ++w) {
                             for (int c = 0; c < channel; ++c) {
-                                auto value = img[c][ht * 224 + h][wt * 224 + w];
+                                auto value = img[c][ht * 336 + h][wt * 336 + w];
                                 tensor1.setDataAt<float>(base_batch + ht * w_times + wt + 1, h, c, w, value);
                             }
                         }
